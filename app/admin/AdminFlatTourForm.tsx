@@ -15,7 +15,7 @@ type Tour = {
 export default function AdminFlatTourForm() {
   const [tour, setTour] = useState<Tour | null>(null);
   const [title, setTitle] = useState("Sample Flat Tour");
-  const [bhkLabel, setBhkLabel] = useState("1 BHK Sample Flat");
+  const [bhkLabel, setBhkLabel] = useState("1 BHK");
   const [isSaving, setIsSaving] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">(
@@ -122,7 +122,10 @@ export default function AdminFlatTourForm() {
     setIsSaving(true);
     setMessage("Removing video…");
     try {
-      const response = await fetch("/api/admin/flat-tour", { method: "DELETE" });
+      const response = await fetch(
+        `/api/admin/flat-tour?bhkLabel=${encodeURIComponent(bhkLabel)}`,
+        { method: "DELETE" },
+      );
       const data = (await response.json()) as { error?: string };
       if (!response.ok) {
         throw new Error(data.error || "Remove failed.");
@@ -182,9 +185,9 @@ export default function AdminFlatTourForm() {
             onChange={(event) => setBhkLabel(event.target.value)}
             required
           >
-            <option>1 BHK Sample Flat</option>
-            <option>2 BHK Sample Flat</option>
-            <option>3 BHK Sample Flat</option>
+            <option>1 BHK</option>
+            <option>2 BHK</option>
+            <option>3 BHK</option>
             <option>Project Walkthrough</option>
           </select>
         </label>
