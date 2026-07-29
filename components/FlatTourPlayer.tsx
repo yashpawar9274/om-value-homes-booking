@@ -5,10 +5,12 @@ import { useEffect, useState } from "react";
 type FlatTour = {
   title: string;
   bhkLabel: string;
-  fileName: string;
-  fileSize: number;
+  source: "storage" | "youtube";
+  videoUrl: string | null;
+  embedHtml: string | null;
+  fileName: string | null;
+  fileSize: number | null;
   updatedAt: string;
-  videoUrl: string;
 };
 
 export default function FlatTourPlayer({
@@ -77,20 +79,31 @@ export default function FlatTourPlayer({
       className={`responsive-tour ${orientation} ${compact ? "compact" : ""}`}
     >
       <div className="video-stage">
-        <video
-          key={tour.updatedAt}
-          controls
-          playsInline
-          preload="metadata"
-          src={`${tour.videoUrl}?v=${encodeURIComponent(tour.updatedAt)}`}
-          aria-label={tour.title}
-          onLoadedMetadata={(event) => {
-            const video = event.currentTarget;
-            setOrientation(
-              video.videoHeight > video.videoWidth ? "portrait" : "landscape",
-            );
-          }}
-        />
+        {tour.source === "storage" ? (
+          <video
+            key={tour.updatedAt}
+            controls
+            playsInline
+            preload="metadata"
+            src={`${tour.videoUrl}?v=${encodeURIComponent(tour.updatedAt)}`}
+            aria-label={tour.title}
+            onLoadedMetadata={(event) => {
+              const video = event.currentTarget;
+              setOrientation(
+                video.videoHeight > video.videoWidth ? "portrait" : "landscape",
+              );
+            }}
+          />
+        ) : tour.embedHtml ? (
+          <div className="embed-player" dangerouslySetInnerHTML={{ __html: tour.embedHtml }} />
+        ) : (
+          <iframe
+            title={tour.title}
+            src={tour.videoUrl || undefined}
+            allowFullScreen
+            loading="lazy"
+          />
+        )}
       </div>
       <div className="responsive-tour-meta">
         <strong>{tour.title}</strong>

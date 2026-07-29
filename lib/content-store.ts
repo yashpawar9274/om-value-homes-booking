@@ -53,11 +53,13 @@ export type ManagedCustomerStory = {
 export type ManagedFlatTour = {
   title: string;
   bhkLabel: string;
-  fileName: string;
-  fileSize: number;
+  source: "storage" | "youtube";
+  videoUrl: string | null;
+  embedHtml: string | null;
+  fileName: string | null;
+  fileSize: number | null;
   updatedAt: string;
-  videoUrl: string;
-  videoPath: string;
+  videoPath: string | null;
 };
 
 type BlogRow = {
@@ -109,9 +111,13 @@ type CustomerRow = {
 type FlatTourRow = {
   title: string;
   bhk_label: string;
-  video_path: string;
-  file_name: string;
-  file_size: number;
+  video_source: string;
+  video_path: string | null;
+  video_url: string | null;
+  embed_html: string | null;
+  file_name: string | null;
+  content_type: string | null;
+  file_size: number | null;
   updated_at: string;
 };
 
@@ -298,16 +304,23 @@ export async function listManagedFlatTours(
 ) {
   const { data, error } = await client
     .from("flat_tours")
-    .select("title,bhk_label,video_path,file_name,file_size,updated_at")
+    .select(
+      "title,bhk_label,video_source,video_path,video_url,embed_html,file_name,content_type,file_size,updated_at",
+    )
     .order("bhk_label", { ascending: true });
   if (error) throw error;
   return (data as FlatTourRow[]).map((row) => ({
     title: row.title,
     bhkLabel: row.bhk_label,
+    source: row.video_source === "youtube" ? "youtube" : "storage",
     fileName: row.file_name,
     fileSize: row.file_size,
     updatedAt: row.updated_at,
-    videoUrl: mediaUrl(client, "flat-tours", row.video_path) ?? "",
+    videoUrl:
+      row.video_source === "storage"
+        ? mediaUrl(client, "flat-tours", row.video_path)
+        : row.video_url,
+    embedHtml: row.embed_html,
     videoPath: row.video_path,
   }));
 }
@@ -318,7 +331,9 @@ export async function getManagedFlatTour(
 ): Promise<ManagedFlatTour | null> {
   let query = client
     .from("flat_tours")
-    .select("title,bhk_label,video_path,file_name,file_size,updated_at");
+    .select(
+      "title,bhk_label,video_source,video_path,video_url,embed_html,file_name,content_type,file_size,updated_at",
+    );
 
   if (bhkLabel) {
     query = query.eq("bhk_label", bhkLabel);
@@ -334,10 +349,15 @@ export async function getManagedFlatTour(
   return {
     title: row.title,
     bhkLabel: row.bhk_label,
+    source: row.video_source === "youtube" ? "youtube" : "storage",
     fileName: row.file_name,
     fileSize: row.file_size,
     updatedAt: row.updated_at,
-    videoUrl: mediaUrl(client, "flat-tours", row.video_path) ?? "",
+    videoUrl:
+      row.video_source === "storage"
+        ? mediaUrl(client, "flat-tours", row.video_path)
+        : row.video_url,
+    embedHtml: row.embed_html,
     videoPath: row.video_path,
   };
 }

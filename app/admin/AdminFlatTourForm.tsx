@@ -6,16 +6,20 @@ import { createClient } from "@/lib/supabase/client";
 type Tour = {
   title: string;
   bhkLabel: string;
-  fileName: string;
-  fileSize: number;
+  source: "storage" | "youtube";
+  videoUrl: string | null;
+  embedHtml: string | null;
+  fileName: string | null;
+  fileSize: number | null;
   updatedAt: string;
-  videoUrl: string;
 };
 
 export default function AdminFlatTourForm() {
   const [tour, setTour] = useState<Tour | null>(null);
   const [title, setTitle] = useState("Sample Flat Tour");
   const [bhkLabel, setBhkLabel] = useState("1 BHK");
+  const [source, setSource] = useState<"storage" | "youtube">("storage");
+  const [youtubeInput, setYoutubeInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">(
@@ -45,6 +49,12 @@ export default function AdminFlatTourForm() {
         if (data.tour) {
           setTitle(data.tour.title);
           setBhkLabel(data.tour.bhkLabel);
+          setSource(data.tour.source ?? "storage");
+          setYoutubeInput(
+            data.tour.source === "youtube"
+              ? data.tour.embedHtml || data.tour.videoUrl || ""
+              : "",
+          );
         }
       })
       .catch(() => {
@@ -53,51 +63,112 @@ export default function AdminFlatTourForm() {
       });
   }, [bhkLabel]);
 
+  function normalizeYoutubeInput(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new Error("Please provide a YouTube link or embed code.");
+    }
+    if (trimmed.includes("<iframe") || trimmed.includes("<embed") || trimmed.includes("<video")) {
+      return { videoUrl: null, embedHtml: trimmed };
+    }
+    let url: URL;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      throw new Error("Please enter a valid URL or iframe embed code.");
+    }
+
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+    const params = new URLSearchParams(url.search);
+    if (hostname === "youtube.com" || hostname === "m.youtube.com") {
+      if (url.pathname === "/watch") {
+        const videoId = params.get("v");
+        if (!videoId) {
+          throw new Error("YouTube watch links must include a video ID.");
+        }
+        return { videoUrl: `https://www.youtube.com/embed/${videoId}`, embedHtml: null };
+      }
+      if (url.pathname.startsWith("/shorts/")) {
+        const videoId = url.pathname.split("/")[2];
+        if (!videoId) {
+          throw new Error("Invalid YouTube shorts URL.");
+        }
+        return { videoUrl: `https://www.youtube.com/embed/${videoId}`, embedHtml: null };
+      }
+      if (url.pathname.startsWith("/embed/")) {
+        return { videoUrl: trimmed, embedHtml: null };
+      }
+    }
+    if (hostname === "youtu.be") {
+      const videoId = url.pathname.slice(1);
+      if (!videoId) {
+        throw new Error("Invalid YouTube short link.");
+      }
+      return { videoUrl: `https://www.youtube.com/embed/${videoId}`, embedHtml: null };
+    }
+
+    return { videoUrl: trimmed, embedHtml: null };
+  }
+
   async function uploadVideo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const file = form.get("video");
-
-    if (!(file instanceof File) || !file.size) {
-      setMessage("Please select a flat tour video.");
-      return;
-    }
+    const trimmedYoutubeInput = youtubeInput.trim();
 
     setIsSaving(true);
-    setMessage("Uploading video…");
+    setMessage(source === "storage" ? "Uploading video…" : "Saving embed source…");
 
     try {
-      if (!file.type.startsWith("video/")) {
-        throw new Error("Please select a valid video file.");
-      }
-      const extension =
-        file.name
-          .split(".")
-          .pop()
-          ?.replace(/[^a-z0-9]/gi, "")
-          .toLowerCase() || "mp4";
-      const videoPath = `tours/${crypto.randomUUID()}.${extension}`;
-      const { error: uploadError } = await createClient()
-        .storage.from("flat-tours")
-        .upload(videoPath, file, {
-          cacheControl: "3600",
-          contentType: file.type || "video/mp4",
-          upsert: false,
-        });
-      if (uploadError) throw uploadError;
+      let payload: Record<string, unknown> = {
+        title,
+        bhkLabel,
+        source,
+      };
 
-      const response = await fetch("/api/admin/flat-tour", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          bhkLabel,
+      if (source === "storage") {
+        if (!(file instanceof File) || !file.size) {
+          throw new Error("Please select a flat tour video.");
+        }
+        if (!file.type.startsWith("video/")) {
+          throw new Error("Please select a valid video file.");
+        }
+        const extension =
+          file.name
+            .split(".")
+            .pop()
+            ?.replace(/[^a-z0-9]/gi, "")
+            .toLowerCase() || "mp4";
+        const videoPath = `tours/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await createClient()
+          .storage.from("flat-tours")
+          .upload(videoPath, file, {
+            cacheControl: "3600",
+            contentType: file.type || "video/mp4",
+            upsert: false,
+          });
+        if (uploadError) throw uploadError;
+        payload = {
+          ...payload,
           videoPath,
           fileName: file.name,
           contentType: file.type || "video/mp4",
           fileSize: file.size,
-        }),
+        };
+      } else {
+        const result = normalizeYoutubeInput(trimmedYoutubeInput);
+        payload = {
+          ...payload,
+          videoUrl: result.videoUrl,
+          embedHtml: result.embedHtml,
+        };
+      }
+
+      const response = await fetch("/api/admin/flat-tour", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
       const data = (await response.json()) as { tour?: Tour; error?: string };
       if (!response.ok || !data.tour) {
@@ -106,7 +177,14 @@ export default function AdminFlatTourForm() {
 
       setTour(data.tour);
       formElement.reset();
-      setMessage("Flat tour video is now live on its dedicated page and property details.");
+      if (data.tour.source === "youtube") {
+        setYoutubeInput(trimmedYoutubeInput);
+      }
+      setMessage(
+        data.tour.source === "storage"
+          ? "Flat tour video is now live on its dedicated page and property details."
+          : "Flat tour embed source is now live on its dedicated page and property details.",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Upload failed.");
     } finally {
@@ -193,10 +271,36 @@ export default function AdminFlatTourForm() {
         </label>
 
         <label>
-          <span>Select video</span>
-          <input name="video" type="file" accept="video/*" required />
-          <small>Upload MP4, WebM or another browser-supported video format.</small>
+          <span>Source</span>
+          <select
+            value={source}
+            onChange={(event) => setSource(event.target.value as "storage" | "youtube")}
+            required
+          >
+            <option value="storage">Upload video file</option>
+            <option value="youtube">YouTube / embed source</option>
+          </select>
         </label>
+
+        {source === "storage" ? (
+          <label>
+            <span>Select video</span>
+            <input name="video" type="file" accept="video/*" required />
+            <small>Upload MP4, WebM or another browser-supported video format.</small>
+          </label>
+        ) : (
+          <label>
+            <span>YouTube or embed code</span>
+            <textarea
+              value={youtubeInput}
+              onChange={(event) => setYoutubeInput(event.target.value)}
+              placeholder="Paste a YouTube link or embed HTML here"
+              rows={4}
+              required
+            />
+            <small>Enter a YouTube link, shorts URL, or iframe embed snippet.</small>
+          </label>
+        )}
 
         <button type="submit" disabled={isSaving}>
           {isSaving ? "Please wait…" : tour ? "Replace Flat Tour" : "Publish Flat Tour"}
@@ -216,25 +320,43 @@ export default function AdminFlatTourForm() {
         {tour ? (
           <>
             <div className={`admin-video-stage ${orientation}`}>
-              <video
-                key={tour.updatedAt}
-                controls
-                preload="metadata"
-                src={`${tour.videoUrl}?v=${encodeURIComponent(tour.updatedAt)}`}
-                onLoadedMetadata={(event) => {
-                  const video = event.currentTarget;
-                  setOrientation(
-                    video.videoHeight > video.videoWidth
-                      ? "portrait"
-                      : "landscape",
-                  );
-                }}
-              />
+              {tour.source === "storage" ? (
+                <video
+                  key={tour.updatedAt}
+                  controls
+                  preload="metadata"
+                  src={`${tour.videoUrl}?v=${encodeURIComponent(tour.updatedAt)}`}
+                  onLoadedMetadata={(event) => {
+                    const video = event.currentTarget;
+                    setOrientation(
+                      video.videoHeight > video.videoWidth
+                        ? "portrait"
+                        : "landscape",
+                    );
+                  }}
+                />
+              ) : tour.embedHtml ? (
+                <div
+                  className="embed-preview"
+                  dangerouslySetInnerHTML={{ __html: tour.embedHtml }}
+                />
+              ) : (
+                <iframe
+                  title={tour.title}
+                  src={tour.videoUrl || undefined}
+                  allowFullScreen
+                  loading="lazy"
+                />
+              )}
             </div>
             <div className="admin-video-meta">
               <strong>{tour.title}</strong>
               <span>{tour.bhkLabel}</span>
-              <small>{tour.fileName} · {(tour.fileSize / 1024 / 1024).toFixed(1)} MB</small>
+              {tour.source === "storage" && tour.fileName ? (
+                <small>{tour.fileName} · {((tour.fileSize ?? 0) / 1024 / 1024).toFixed(1)} MB</small>
+              ) : tour.source === "youtube" ? (
+                <small>YouTube / embed source</small>
+              ) : null}
             </div>
             <button
               className="admin-remove"
