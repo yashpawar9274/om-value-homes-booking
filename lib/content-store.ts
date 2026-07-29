@@ -275,6 +275,20 @@ export async function getManagedFounder(
   return data ? mapFounder(client, data as FounderRow) : null;
 }
 
+export async function listManagedFounders(
+  client: SupabaseClient = publicClient(),
+) {
+  const { data, error } = await client
+    .from("founder_profiles")
+    .select("*")
+    .order("id", { ascending: true });
+
+  if (error) throw error;
+
+  return (data as FounderRow[]).map((row) => mapFounder(client, row));
+}
+
+
 export async function listManagedFounderProjects(
   client: SupabaseClient = publicClient(),
 ) {
