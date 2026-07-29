@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getManagedFlatTour } from "@/lib/content-store";
+import {
+  getManagedFlatTour,
+  listManagedFlatTours,
+} from "@/lib/content-store";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -20,22 +23,33 @@ async function authorizedClient() {
   return supabase;
 }
 
-export async function GET() {
+function errorResponse(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "Video upload failed.";
+  const status = message.toLowerCase().includes("duplicate") ? 409 : 400;
+  return NextResponse.json({ error: message }, { status });
+}
+
+export async function GET(request: NextRequest) {
   try {
     const client = await authorizedClient();
     if (!client) {
       return NextResponse.json(
-        { authorized: false, tour: null },
+        { authorized: false, tours: [], tour: null },
         { status: 403 },
       );
     }
-    return NextResponse.json({
-      authorized: true,
-      tour: await getManagedFlatTour(client),
-    });
-  } catch {
+
+    const bhkLabel = request.nextUrl.searchParams.get("bhkLabel")?.trim();
+    const tours = await listManagedFlatTours(client);
+    const tour = bhkLabel
+      ? tours.find((item) => item.bhkLabel === bhkLabel) ?? null
+      : tours[0] ?? null;
+
+    return NextResponse.json({ authorized: true, tours, tour });
+  } catch (error) {
     return NextResponse.json(
-      { authorized: false, tour: null },
+      { authorized: false, tours: [], tour: null, error: "Unable to load flat tours." },
       { status: 503 },
     );
   }
@@ -77,23 +91,30 @@ export async function POST(request: NextRequest) {
 
     const { data: current, error: readError } = await client
       .from("flat_tours")
-      .select("video_path")
-      .eq("id", 1)
+      .select("id, video_path")
+      .eq("bhk_label", bhkLabel)
       .maybeSingle();
     if (readError) throw readError;
 
-    const { error } = await client.from("flat_tours").upsert(
-      {
-        id: 1,
-        title,
-        bhk_label: bhkLabel,
-        video_path: videoPath,
-        file_name: body.fileName,
-        content_type: body.contentType,
-        file_size: body.fileSize,
-      },
-      { onConflict: "id" },
-    );
+    const payload = {
+      title,
+      bhk_label: bhkLabel,
+      video_path: videoPath,
+      file_name: body.fileName,
+      content_type: body.contentType,
+      file_size: body.fileSize,
+    };
+
+    let error;
+    if (current?.id) {
+      ({ error } = await client
+        .from("flat_tours")
+        .update(payload)
+        .eq("id", current.id));
+    } else {
+      ({ error } = await client.from("flat_tours").insert(payload));
+    }
+
     if (error) throw error;
 
     const oldPath = current?.video_path as string | null | undefined;
@@ -101,24 +122,20 @@ export async function POST(request: NextRequest) {
       await client.storage.from("flat-tours").remove([oldPath]);
     }
 
+    const tours = await listManagedFlatTours(client);
     return NextResponse.json({
-      tour: await getManagedFlatTour(client),
+      tours,
+      tour: await getManagedFlatTour(bhkLabel, client),
     });
   } catch (error) {
     if (videoPath) {
       await client.storage.from("flat-tours").remove([videoPath]);
     }
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Video upload failed.",
-      },
-      { status: 400 },
-    );
+    return errorResponse(error);
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   const client = await authorizedClient();
   if (!client) {
     return NextResponse.json(
@@ -128,26 +145,34 @@ export async function DELETE() {
   }
 
   try {
+    const bhkLabel = request.nextUrl.searchParams.get("bhkLabel")?.trim();
+    if (!bhkLabel) {
+      throw new Error("Valid flat tour label is required.");
+    }
+
     const { data, error: readError } = await client
       .from("flat_tours")
-      .select("video_path")
-      .eq("id", 1)
+      .select("id, video_path")
+      .eq("bhk_label", bhkLabel)
       .maybeSingle();
     if (readError) throw readError;
 
-    const { error } = await client.from("flat_tours").delete().eq("id", 1);
+    if (!data?.id) {
+      throw new Error("Flat tour record not found.");
+    }
+
+    const { error } = await client.from("flat_tours").delete().eq("id", data.id);
     if (error) throw error;
-    if (data?.video_path) {
+    if (data.video_path) {
       await client.storage.from("flat-tours").remove([data.video_path]);
     }
-    return NextResponse.json({ ok: true });
+
+    const tours = await listManagedFlatTours(client);
+    return NextResponse.json({
+      tours,
+      tour: tours[0] ?? null,
+    });
   } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Remove failed.",
-      },
-      { status: 400 },
-    );
+    return errorResponse(error);
   }
 }

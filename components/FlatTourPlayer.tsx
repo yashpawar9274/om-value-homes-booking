@@ -13,8 +13,10 @@ type FlatTour = {
 
 export default function FlatTourPlayer({
   compact = false,
+  bhkLabel,
 }: {
   compact?: boolean;
+  bhkLabel?: string;
 }) {
   const [tour, setTour] = useState<FlatTour | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,7 +28,11 @@ export default function FlatTourPlayer({
     let isActive = true;
 
     function loadTour() {
-      fetch("/api/flat-tour", { cache: "no-store" })
+      const query = bhkLabel
+        ? `?bhkLabel=${encodeURIComponent(bhkLabel)}`
+        : "";
+
+      fetch(`/api/flat-tour${query}`, { cache: "no-store" })
         .then((response) => response.json())
         .then((data: { tour: FlatTour | null }) => {
           if (isActive) setTour(data.tour);
@@ -45,7 +51,7 @@ export default function FlatTourPlayer({
       isActive = false;
       window.removeEventListener("om-content-updated", loadTour);
     };
-  }, []);
+  }, [bhkLabel]);
 
   if (isLoading) {
     return (

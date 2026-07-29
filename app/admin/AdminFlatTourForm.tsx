@@ -24,12 +24,20 @@ export default function AdminFlatTourForm() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetch("/api/admin/flat-tour", { cache: "no-store" })
+    const query = bhkLabel
+      ? `?bhkLabel=${encodeURIComponent(bhkLabel)}`
+      : "";
+
+    fetch(`/api/admin/flat-tour${query}`, { cache: "no-store" })
       .then(async (response) => {
         if (response.status === 403) {
-          return { authorized: false, tour: null };
+          return { authorized: false, tours: [], tour: null };
         }
-        return response.json() as Promise<{ authorized: boolean; tour: Tour | null }>;
+        return response.json() as Promise<{
+          authorized: boolean;
+          tours: Tour[];
+          tour: Tour | null;
+        }>;
       })
       .then((data) => {
         setIsAuthorized(data.authorized);
@@ -43,7 +51,7 @@ export default function AdminFlatTourForm() {
         setIsAuthorized(false);
         setMessage("Admin access could not be verified.");
       });
-  }, []);
+  }, [bhkLabel]);
 
   async function uploadVideo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -145,7 +145,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
           <p>
             The player automatically adjusts for vertical and landscape videos.
           </p>
-          <FlatTourPlayer />
+          <FlatTourPlayer bhkLabel={property.bhk} />
         </aside>
       </section>
 

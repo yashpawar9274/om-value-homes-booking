@@ -293,14 +293,40 @@ export async function listManagedCustomers(
   return (data as CustomerRow[]).map((row) => mapCustomer(client, row));
 }
 
-export async function getManagedFlatTour(
+export async function listManagedFlatTours(
   client: SupabaseClient = publicClient(),
-): Promise<ManagedFlatTour | null> {
+) {
   const { data, error } = await client
     .from("flat_tours")
     .select("title,bhk_label,video_path,file_name,file_size,updated_at")
-    .eq("id", 1)
-    .maybeSingle();
+    .order("bhk_label", { ascending: true });
+  if (error) throw error;
+  return (data as FlatTourRow[]).map((row) => ({
+    title: row.title,
+    bhkLabel: row.bhk_label,
+    fileName: row.file_name,
+    fileSize: row.file_size,
+    updatedAt: row.updated_at,
+    videoUrl: mediaUrl(client, "flat-tours", row.video_path) ?? "",
+    videoPath: row.video_path,
+  }));
+}
+
+export async function getManagedFlatTour(
+  bhkLabel?: string,
+  client: SupabaseClient = publicClient(),
+): Promise<ManagedFlatTour | null> {
+  let query = client
+    .from("flat_tours")
+    .select("title,bhk_label,video_path,file_name,file_size,updated_at");
+
+  if (bhkLabel) {
+    query = query.eq("bhk_label", bhkLabel);
+  } else {
+    query = query.order("id", { ascending: true }).limit(1);
+  }
+
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   if (!data) return null;
 
