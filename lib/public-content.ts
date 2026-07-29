@@ -1,9 +1,11 @@
 import {
   getManagedBlog,
-  getManagedFounder,
+  getManagedHome,
   listManagedBlogs,
   listManagedCustomers,
   listManagedFounderProjects,
+  listManagedFounders,
+  listManagedHomes,
 } from "@/lib/content-store";
 
 export function fetchManagedBlogs() {
@@ -15,13 +17,22 @@ export function fetchManagedBlog(slug: string) {
 }
 
 export async function fetchFounderContent() {
-  const [founder, projects] = await Promise.all([
-    getManagedFounder(),
+  const [founders, projects] = await Promise.all([
+    listManagedFounders(),
     listManagedFounderProjects(),
   ]);
-  return { founder, projects };
+
+  return { founders, projects };
 }
 
 export function fetchManagedCustomers() {
   return listManagedCustomers();
+}
+
+export function fetchManagedHomes() {
+  return listManagedHomes();
+}
+
+export function fetchManagedHome(slug: string) {
+  return getManagedHome(slug);
 }
