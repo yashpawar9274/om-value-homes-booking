@@ -47,6 +47,26 @@ export default function ContentAutoRefresh() {
           { event: "*", schema: "public", table: "flat_tours" },
           refresh,
         )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "property_types" },
+          refresh,
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "amenities" },
+          refresh,
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "faqs" },
+          refresh,
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "site_settings" },
+          refresh,
+        )
         .subscribe();
 
       return () => {

@@ -6,19 +6,30 @@ import FlatTourPlayer from "@/components/FlatTourPlayer";
 import JsonLd from "@/components/JsonLd";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
-import { getProperty, properties, SITE_URL } from "@/lib/site-data";
+import {
+  fallbackManagedHome,
+  fallbackManagedHomes,
+} from "@/lib/content-store";
+import { fetchManagedHome } from "@/lib/public-content";
+import { SITE_URL } from "@/lib/site-data";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
 export function generateStaticParams() {
-  return properties.map((property) => ({ slug: property.slug }));
+  return fallbackManagedHomes().map((property) => ({ slug: property.slug }));
+}
+
+export const dynamic = "force-dynamic";
+
+async function findHome(slug: string) {
+  return fetchManagedHome(slug).catch(() => fallbackManagedHome(slug));
 }
 
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const property = getProperty(slug);
+  const property = await findHome(slug);
   if (!property) return {};
 
   return {
@@ -42,7 +53,7 @@ export async function generateMetadata({
 
 export default async function PropertyDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const property = getProperty(slug);
+  const property = await findHome(slug);
   if (!property) notFound();
 
   const pageUrl = `${SITE_URL}/homes/${property.slug}`;
@@ -56,7 +67,7 @@ export default async function PropertyDetailPage({ params }: PageProps) {
           name: `${property.bhk} at Fair Township, Palghar West`,
           description: property.metaDescription,
           url: pageUrl,
-          image: `${SITE_URL}/om-value-homes-building.png`,
+          image: property.imageUrl || `${SITE_URL}/om-value-homes-building.png`,
           address: {
             "@type": "PostalAddress",
             streetAddress: "Fair Township, Satpati–Palghar Road, Dhansar",
@@ -114,11 +125,12 @@ export default async function PropertyDetailPage({ params }: PageProps) {
           </Link>
         </div>
         <Image
-          src="/om-value-homes-building.png"
+          src={property.imageUrl ?? "/om-value-homes-building.png"}
           alt={`${property.bhk} residential building at Fair Township, Palghar West`}
           width={1254}
           height={1254}
           priority
+          unoptimized={Boolean(property.imageUrl)}
         />
       </section>
 

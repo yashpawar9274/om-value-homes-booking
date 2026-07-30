@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getManagedBlog,
-  getManagedFounder,
+  getManagedSiteSettings,
+  listManagedAmenities,
   listManagedBlogs,
   listManagedCustomers,
+  listManagedFaqs,
   listManagedFounderProjects,
+  listManagedFounders,
+  listManagedHomes,
 } from "@/lib/content-store";
 
 export const dynamic = "force-dynamic";
@@ -25,17 +29,28 @@ export async function GET(request: NextRequest) {
     }
 
     if (view === "founder") {
-      const [founder, projects] = await Promise.all([
-        getManagedFounder(),
+      const [founders, projects] = await Promise.all([
+        listManagedFounders(),
         listManagedFounderProjects(),
       ]);
-      return NextResponse.json({ founder, projects });
+      return NextResponse.json({ founders, founder: founders[0] ?? null, projects });
     }
 
     if (view === "customers") {
       return NextResponse.json({
         customers: await listManagedCustomers(),
       });
+    }
+
+    if (view === "homepage") {
+      const [siteSettings, homes, amenities, faqs, blogs] = await Promise.all([
+        getManagedSiteSettings(),
+        listManagedHomes(),
+        listManagedAmenities(),
+        listManagedFaqs(),
+        listManagedBlogs(),
+      ]);
+      return NextResponse.json({ siteSettings, homes, amenities, faqs, blogs });
     }
 
     return NextResponse.json(

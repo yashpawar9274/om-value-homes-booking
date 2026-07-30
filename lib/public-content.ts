@@ -1,8 +1,11 @@
 import {
   getManagedBlog,
   getManagedHome,
+  getManagedSiteSettings,
+  listManagedAmenities,
   listManagedBlogs,
   listManagedCustomers,
+  listManagedFaqs,
   listManagedFounderProjects,
   listManagedFounders,
   listManagedHomes,
@@ -35,4 +38,16 @@ export function fetchManagedHomes() {
 
 export function fetchManagedHome(slug: string) {
   return getManagedHome(slug);
+}
+
+export function fetchSiteSettings() {
+  return getManagedSiteSettings();
+}
+
+export function fetchManagedAmenities() {
+  return listManagedAmenities();
+}
+
+export function fetchManagedFaqs() {
+  return listManagedFaqs();
 }

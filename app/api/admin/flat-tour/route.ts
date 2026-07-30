@@ -4,10 +4,13 @@ import {
   listManagedFlatTours,
 } from "@/lib/content-store";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeYoutubeUrl } from "@/lib/youtube";
 
 export const dynamic = "force-dynamic";
 
 const DEFAULT_ADMIN_EMAIL = "omvaluehomes6@gmail.com";
+const ALLOWED_LABELS = new Set(["1 BHK", "2 BHK", "3 BHK", "Project Walkthrough"]);
+const ALLOWED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
 async function authorizedClient() {
   const supabase = await createClient();
@@ -15,88 +18,87 @@ async function authorizedClient() {
     data: { user },
     error,
   } = await supabase.auth.getUser();
-  const allowed = (
-    process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL
-  ).toLowerCase();
+  const email = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();
+  if (error || !user || user.email?.toLowerCase() !== email) return null;
+  const { data: allowed, error: roleError } = await supabase.rpc("is_content_admin");
+  return !roleError && allowed === true ? supabase : null;
+}
 
-  if (error || !user || user.email?.toLowerCase() !== allowed) return null;
-  return supabase;
+function json(
+  body: Record<string, unknown>,
+  status = 200,
+) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 function errorResponse(error: unknown) {
-  const message =
-    error instanceof Error ? error.message : "Video upload failed.";
-  const status = message.toLowerCase().includes("duplicate") ? 409 : 400;
-  return NextResponse.json({ error: message }, { status });
+  const message = error instanceof Error ? error.message : "Video update failed.";
+  return json({ error: message }, /duplicate|unique/i.test(message) ? 409 : 400);
 }
 
 export async function GET(request: NextRequest) {
   try {
     const client = await authorizedClient();
-    if (!client) {
-      return NextResponse.json(
-        { authorized: false, tours: [], tour: null },
-        { status: 403 },
-      );
-    }
-
+    if (!client) return json({ authorized: false, tours: [], tour: null }, 403);
     const bhkLabel = request.nextUrl.searchParams.get("bhkLabel")?.trim();
     const tours = await listManagedFlatTours(client);
     const tour = bhkLabel
       ? tours.find((item) => item.bhkLabel === bhkLabel) ?? null
       : tours[0] ?? null;
-
-    return NextResponse.json({ authorized: true, tours, tour });
-  } catch (error) {
-    return NextResponse.json(
+    return json({ authorized: true, tours, tour });
+  } catch {
+    return json(
       { authorized: false, tours: [], tour: null, error: "Unable to load flat tours." },
-      { status: 503 },
+      503,
     );
   }
 }
 
 export async function POST(request: NextRequest) {
   const client = await authorizedClient();
-  if (!client) {
-    return NextResponse.json(
-      { error: "Admin access required." },
-      { status: 403 },
-    );
-  }
+  if (!client) return json({ error: "Admin access required." }, 403);
 
-  let videoPath = "";
+  let uploadedPath = "";
+  let saveSucceeded = false;
   try {
     const body = (await request.json()) as {
       title?: string;
       bhkLabel?: string;
       source?: string;
       videoPath?: string;
-      videoUrl?: string | null;
-      embedHtml?: string | null;
-      fileName?: string | null;
-      contentType?: string | null;
-      fileSize?: number | null;
+      youtubeInput?: string;
+      fileName?: string;
+      contentType?: string;
+      fileSize?: number;
     };
-    const title = body.title?.trim() ?? "";
+    const title = body.title?.trim().slice(0, 120) ?? "";
     const bhkLabel = body.bhkLabel?.trim() ?? "";
     const source = body.source === "youtube" ? "youtube" : "storage";
-    videoPath = body.videoPath?.trim() ?? "";
-    const videoUrl = body.videoUrl?.trim() || null;
-    const embedHtml = body.embedHtml?.trim() || null;
+    uploadedPath = body.videoPath?.trim() ?? "";
 
-    if (!title || !bhkLabel) {
-      throw new Error("Title and BHK label are required.");
+    if (!title || !ALLOWED_LABELS.has(bhkLabel)) {
+      throw new Error("A valid title and flat type are required.");
     }
 
     const isStorage = source === "storage";
+    let videoUrl: string | null = null;
     if (isStorage) {
-      if (!videoPath.startsWith("tours/") || !body.fileName || !body.contentType?.startsWith("video/") || !body.fileSize) {
-        throw new Error("Valid video details are required.");
+      if (
+        !/^tours\/[a-f0-9-]+\.(?:mp4|webm|mov)$/i.test(uploadedPath) ||
+        !body.fileName ||
+        !body.contentType ||
+        !ALLOWED_VIDEO_TYPES.has(body.contentType) ||
+        !body.fileSize ||
+        body.fileSize > 500 * 1024 * 1024
+      ) {
+        throw new Error("Upload an MP4, WebM or MOV video smaller than 500 MB.");
       }
     } else {
-      if (!videoUrl && !embedHtml) {
-        throw new Error("A YouTube or embed source is required.");
-      }
+      videoUrl = normalizeYoutubeUrl(body.youtubeInput || "");
+      if (!videoUrl) throw new Error("A YouTube video is required.");
     }
 
     const { data: current, error: readError } = await client
@@ -106,43 +108,33 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (readError) throw readError;
 
-    const payload: Record<string, unknown> = {
+    const payload = {
       title,
       bhk_label: bhkLabel,
       video_source: source,
-      video_path: isStorage ? videoPath : null,
+      video_path: isStorage ? uploadedPath : null,
       video_url: isStorage ? null : videoUrl,
-      embed_html: isStorage ? null : embedHtml,
-      file_name: isStorage ? body.fileName : null,
+      embed_html: null,
+      file_name: isStorage ? body.fileName?.slice(0, 255) : null,
       content_type: isStorage ? body.contentType : null,
       file_size: isStorage ? body.fileSize : null,
     };
 
-    let error;
-    if (current?.id) {
-      ({ error } = await client
-        .from("flat_tours")
-        .update(payload)
-        .eq("id", current.id));
-    } else {
-      ({ error } = await client.from("flat_tours").insert(payload));
-    }
-
+    const { error } = current?.id
+      ? await client.from("flat_tours").update(payload).eq("id", current.id)
+      : await client.from("flat_tours").insert(payload);
     if (error) throw error;
+    saveSucceeded = true;
 
     const oldPath = current?.video_path as string | null | undefined;
-    if (oldPath && oldPath !== videoPath) {
+    if (oldPath && oldPath !== uploadedPath) {
       await client.storage.from("flat-tours").remove([oldPath]);
     }
 
-    const tours = await listManagedFlatTours(client);
-    return NextResponse.json({
-      tours,
-      tour: await getManagedFlatTour(bhkLabel, client),
-    });
+    return json({ tour: await getManagedFlatTour(bhkLabel, client) });
   } catch (error) {
-    if (videoPath) {
-      await client.storage.from("flat-tours").remove([videoPath]);
+    if (uploadedPath && !saveSucceeded) {
+      await client.storage.from("flat-tours").remove([uploadedPath]);
     }
     return errorResponse(error);
   }
@@ -150,41 +142,24 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const client = await authorizedClient();
-  if (!client) {
-    return NextResponse.json(
-      { error: "Admin access required." },
-      { status: 403 },
-    );
-  }
-
+  if (!client) return json({ error: "Admin access required." }, 403);
   try {
-    const bhkLabel = request.nextUrl.searchParams.get("bhkLabel")?.trim();
-    if (!bhkLabel) {
-      throw new Error("Valid flat tour label is required.");
-    }
-
-    const { data, error: readError } = await client
+    const bhkLabel = request.nextUrl.searchParams.get("bhkLabel")?.trim() ?? "";
+    if (!ALLOWED_LABELS.has(bhkLabel)) throw new Error("Select a valid flat type.");
+    const { data: current, error: readError } = await client
       .from("flat_tours")
       .select("id, video_path")
       .eq("bhk_label", bhkLabel)
       .maybeSingle();
     if (readError) throw readError;
-
-    if (!data?.id) {
-      throw new Error("Flat tour record not found.");
+    if (current?.id) {
+      const { error } = await client.from("flat_tours").delete().eq("id", current.id);
+      if (error) throw error;
+      if (current.video_path) {
+        await client.storage.from("flat-tours").remove([current.video_path]);
+      }
     }
-
-    const { error } = await client.from("flat_tours").delete().eq("id", data.id);
-    if (error) throw error;
-    if (data.video_path) {
-      await client.storage.from("flat-tours").remove([data.video_path]);
-    }
-
-    const tours = await listManagedFlatTours(client);
-    return NextResponse.json({
-      tours,
-      tour: tours[0] ?? null,
-    });
+    return json({ ok: true });
   } catch (error) {
     return errorResponse(error);
   }

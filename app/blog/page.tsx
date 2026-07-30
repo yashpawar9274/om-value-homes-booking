@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
@@ -37,7 +38,16 @@ export default async function BlogPage() {
       <section className="blog-index page-section">
         {blogs.map((post, index) => (
           <article className="blog-index-card" key={post.slug}>
-            <div className="blog-index-number">0{index + 1}</div>
+            <div className="blog-index-media">
+              <Image
+                src={post.coverImageUrl ?? "/om-value-homes-building.png"}
+                alt={post.imageAlt}
+                width={480}
+                height={300}
+                unoptimized={Boolean(post.coverImageUrl)}
+              />
+              <span>{String(index + 1).padStart(2, "0")}</span>
+            </div>
             <div>
               <span>{post.category}</span>
               <h2>{post.title}</h2>

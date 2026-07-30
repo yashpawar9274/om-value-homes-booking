@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
-import { GOOGLE_MAPS_LINK } from "@/lib/site-data";
+import { fallbackSiteSettings } from "@/lib/content-store";
+import { fetchSiteSettings } from "@/lib/public-content";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "OM Value Homes Location | Fair Township Palghar West",
@@ -11,7 +14,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/location" },
 };
 
-export default function LocationPage() {
+export default async function LocationPage() {
+  const settings = await fetchSiteSettings().catch(() => fallbackSiteSettings);
   return (
     <main>
       <SiteHeader />
@@ -23,7 +27,7 @@ export default function LocationPage() {
           <p>Connected Palghar Living</p>
           <h1>Fair Township, Palghar West.</h1>
           <span>
-            Satpati–Palghar Road, Dhansar, Palghar West, Maharashtra 401501.
+            {settings.address}.
           </span>
         </div>
       </section>
@@ -31,7 +35,7 @@ export default function LocationPage() {
       <section className="location-page-grid">
         <div>
           <iframe
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3756.481841992919!2d72.7340837!3d19.6920997!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3be71dae99c2aec1%3A0xd2a5461dd44590bb!2sOM%20VALUE%20HOMES!5e0!3m2!1sen!2sin!4v1785066658919!5m2!1sen!2sin"
+            src={settings.mapEmbedUrl}
             title="OM Value Homes location on Google Maps"
             loading="lazy"
             allowFullScreen
@@ -51,12 +55,12 @@ export default function LocationPage() {
             <li>Hospitals and daily conveniences accessible nearby</li>
             <li>Convenient access from the main road</li>
           </ul>
-          <a className="button button-primary" href={GOOGLE_MAPS_LINK} target="_blank" rel="noreferrer">
+          <a className="button button-primary" href={settings.googleMapsLink} target="_blank" rel="noreferrer">
             Open Google Maps <span aria-hidden="true">→</span>
           </a>
         </article>
       </section>
-      <SiteFooter />
+      <SiteFooter settings={settings} />
     </main>
   );
 }

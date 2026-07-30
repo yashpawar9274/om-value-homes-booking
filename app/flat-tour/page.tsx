@@ -29,13 +29,14 @@ export default function FlatTourPage() {
         </div>
       </section>
 
-      <section className="flat-tour-page page-section">
-        <div className="flat-tour-stage">
-          <FlatTourPlayer />
-        </div>
-        <aside>
+      <section className="all-tours page-section">
+        <aside className="all-tours-intro">
           <p className="section-kicker">What to notice</p>
-          <h2>Use the video to prepare your questions.</h2>
+          <h2>Watch every configuration separately.</h2>
+          <p>
+            The admin can attach a different YouTube embed or uploaded video to
+            each home type.
+          </p>
           <ul className="highlight-list">
             <li>Room proportions and possible furniture placement</li>
             <li>Natural light, windows and ventilation</li>
@@ -47,6 +48,14 @@ export default function FlatTourPage() {
             Explore Flat Details <span aria-hidden="true">→</span>
           </Link>
         </aside>
+        <div className="all-tours-grid">
+          {["1 BHK", "2 BHK", "3 BHK"].map((bhk) => (
+            <article className="flat-tour-stage" key={bhk}>
+              <div className="flat-tour-label">{bhk}</div>
+              <FlatTourPlayer bhkLabel={bhk} />
+            </article>
+          ))}
+        </div>
       </section>
       <SiteFooter />
     </main>

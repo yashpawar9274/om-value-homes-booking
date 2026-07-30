@@ -8,7 +8,6 @@ type Tour = {
   bhkLabel: string;
   source: "storage" | "youtube";
   videoUrl: string | null;
-  embedHtml: string | null;
   fileName: string | null;
   fileSize: number | null;
   updatedAt: string;
@@ -52,9 +51,13 @@ export default function AdminFlatTourForm() {
           setSource(data.tour.source ?? "storage");
           setYoutubeInput(
             data.tour.source === "youtube"
-              ? data.tour.embedHtml || data.tour.videoUrl || ""
+              ? data.tour.videoUrl || ""
               : "",
           );
+        } else {
+          setTitle(`${bhkLabel} Flat Tour`);
+          setSource("youtube");
+          setYoutubeInput("");
         }
       })
       .catch(() => {
@@ -62,53 +65,6 @@ export default function AdminFlatTourForm() {
         setMessage("Admin access could not be verified.");
       });
   }, [bhkLabel]);
-
-  function normalizeYoutubeInput(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      throw new Error("Please provide a YouTube link or embed code.");
-    }
-    if (trimmed.includes("<iframe") || trimmed.includes("<embed") || trimmed.includes("<video")) {
-      return { videoUrl: null, embedHtml: trimmed };
-    }
-    let url: URL;
-    try {
-      url = new URL(trimmed);
-    } catch {
-      throw new Error("Please enter a valid URL or iframe embed code.");
-    }
-
-    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
-    const params = new URLSearchParams(url.search);
-    if (hostname === "youtube.com" || hostname === "m.youtube.com") {
-      if (url.pathname === "/watch") {
-        const videoId = params.get("v");
-        if (!videoId) {
-          throw new Error("YouTube watch links must include a video ID.");
-        }
-        return { videoUrl: `https://www.youtube.com/embed/${videoId}`, embedHtml: null };
-      }
-      if (url.pathname.startsWith("/shorts/")) {
-        const videoId = url.pathname.split("/")[2];
-        if (!videoId) {
-          throw new Error("Invalid YouTube shorts URL.");
-        }
-        return { videoUrl: `https://www.youtube.com/embed/${videoId}`, embedHtml: null };
-      }
-      if (url.pathname.startsWith("/embed/")) {
-        return { videoUrl: trimmed, embedHtml: null };
-      }
-    }
-    if (hostname === "youtu.be") {
-      const videoId = url.pathname.slice(1);
-      if (!videoId) {
-        throw new Error("Invalid YouTube short link.");
-      }
-      return { videoUrl: `https://www.youtube.com/embed/${videoId}`, embedHtml: null };
-    }
-
-    return { videoUrl: trimmed, embedHtml: null };
-  }
 
   async function uploadVideo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -134,6 +90,9 @@ export default function AdminFlatTourForm() {
         if (!file.type.startsWith("video/")) {
           throw new Error("Please select a valid video file.");
         }
+        if (file.size > 500 * 1024 * 1024) {
+          throw new Error("Video must be smaller than 500 MB.");
+        }
         const extension =
           file.name
             .split(".")
@@ -157,11 +116,9 @@ export default function AdminFlatTourForm() {
           fileSize: file.size,
         };
       } else {
-        const result = normalizeYoutubeInput(trimmedYoutubeInput);
         payload = {
           ...payload,
-          videoUrl: result.videoUrl,
-          embedHtml: result.embedHtml,
+          youtubeInput: trimmedYoutubeInput,
         };
       }
 
@@ -335,15 +292,12 @@ export default function AdminFlatTourForm() {
                     );
                   }}
                 />
-              ) : tour.embedHtml ? (
-                <div
-                  className="embed-preview"
-                  dangerouslySetInnerHTML={{ __html: tour.embedHtml }}
-                />
               ) : (
                 <iframe
                   title={tour.title}
                   src={tour.videoUrl || undefined}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allowFullScreen
                   loading="lazy"
                 />

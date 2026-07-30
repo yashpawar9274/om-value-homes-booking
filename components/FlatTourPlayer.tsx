@@ -7,7 +7,6 @@ type FlatTour = {
   bhkLabel: string;
   source: "storage" | "youtube";
   videoUrl: string | null;
-  embedHtml: string | null;
   fileName: string | null;
   fileSize: number | null;
   updatedAt: string;
@@ -94,12 +93,12 @@ export default function FlatTourPlayer({
               );
             }}
           />
-        ) : tour.embedHtml ? (
-          <div className="embed-player" dangerouslySetInnerHTML={{ __html: tour.embedHtml }} />
         ) : (
           <iframe
             title={tour.title}
             src={tour.videoUrl || undefined}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
             allowFullScreen
             loading="lazy"
           />

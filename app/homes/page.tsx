@@ -3,7 +3,10 @@ import Image from "next/image";
 import Link from "next/link";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
-import { properties } from "@/lib/site-data";
+import { fallbackManagedHomes } from "@/lib/content-store";
+import { fetchManagedHomes } from "@/lib/public-content";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "1, 2 & 3 BHK Flats in Palghar West",
@@ -12,7 +15,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/homes" },
 };
 
-export default function HomesPage() {
+export default async function HomesPage() {
+  const homes = await fetchManagedHomes().catch(fallbackManagedHomes);
   return (
     <main>
       <SiteHeader />
@@ -32,13 +36,14 @@ export default function HomesPage() {
 
       <section className="page-section">
         <div className="property-listing-grid">
-          {properties.map((property) => (
+          {homes.map((property) => (
             <article className="property-listing-card" key={property.slug}>
               <Image
-                src="/om-value-homes-building.png"
+                src={property.imageUrl ?? "/om-value-homes-building.png"}
                 alt={`${property.bhk} flats at OM Value Homes, Palghar West`}
                 width={1254}
                 height={1254}
+                unoptimized={Boolean(property.imageUrl)}
               />
               <div>
                 <span>{property.status}</span>

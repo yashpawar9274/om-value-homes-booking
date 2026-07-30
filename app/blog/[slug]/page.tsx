@@ -61,7 +61,7 @@ export default async function BlogPostPage({ params }: PageProps) {
           datePublished: post.publishedAt,
           dateModified: post.updatedAt,
           mainEntityOfPage: pageUrl,
-          image: `${SITE_URL}/om-value-homes-building.png`,
+          image: post.coverImageUrl || `${SITE_URL}/om-value-homes-building.png`,
           author: { "@type": "Organization", name: "OM Value Homes" },
           publisher: {
             "@type": "Organization",
@@ -97,12 +97,29 @@ export default async function BlogPostPage({ params }: PageProps) {
         <Image
           className="article-cover"
           src={post.coverImageUrl ?? "/om-value-homes-building.png"}
-          alt={`${post.title} cover`}
+          alt={post.imageAlt}
           width={1254}
           height={1254}
           priority
           unoptimized={Boolean(post.coverImageUrl)}
         />
+
+        {post.videoUrl && (
+          <section className="article-video" aria-label={`${post.title} video`}>
+            <div>
+              <p>Watch the related video</p>
+              <h2>See the project details visually.</h2>
+            </div>
+            <iframe
+              src={post.videoUrl}
+              title={`${post.title} — YouTube video`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+              loading="lazy"
+            />
+          </section>
+        )}
 
         <div className="article-layout">
           <aside>

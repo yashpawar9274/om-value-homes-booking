@@ -2,19 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
+import { fallbackAmenities } from "@/lib/content-store";
+import { fetchManagedAmenities } from "@/lib/public-content";
 
-const amenities = [
-  ["01", "Temple", "A peaceful space within the community."],
-  ["02", "Landscaped Garden", "Green spaces for relaxed everyday living."],
-  ["03", "Kids’ Play Area", "A dedicated activity zone for children."],
-  ["04", "Jogging Track", "A convenient route for daily fitness."],
-  ["05", "24×7 Security", "CCTV-supported gated community security."],
-  ["06", "Modern Lift", "Easy access across the G+7 residential tower."],
-  ["07", "Car Parking", "Organised parking within the project."],
-  ["08", "Indoor Games", "Leisure and recreation closer to home."],
-  ["09", "Shops in Premises", "Daily essentials available nearby."],
-  ["10", "Main Road Touch", "Convenient access from the project entrance."],
-];
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Amenities at Fair Township Palghar West",
@@ -23,7 +14,8 @@ export const metadata: Metadata = {
   alternates: { canonical: "/amenities" },
 };
 
-export default function AmenitiesPage() {
+export default async function AmenitiesPage() {
+  const amenities = await fetchManagedAmenities().catch(() => fallbackAmenities);
   return (
     <main>
       <SiteHeader />
@@ -42,11 +34,11 @@ export default function AmenitiesPage() {
       </section>
       <section className="page-section">
         <div className="amenities-grid page-amenities-grid">
-          {amenities.map(([number, title, copy]) => (
-            <article key={title}>
-              <span>{number}</span>
-              <h2>{title}</h2>
-              <p>{copy}</p>
+          {amenities.map((amenity, index) => (
+            <article key={amenity.id}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <h2>{amenity.title}</h2>
+              <p>{amenity.description}</p>
             </article>
           ))}
         </div>

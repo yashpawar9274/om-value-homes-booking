@@ -6,10 +6,8 @@ import { FormEvent, useEffect, useState } from "react";
 import AdminDashboard from "./AdminDashboard";
 import { createClient } from "@/lib/supabase/client";
 
-const ADMIN_EMAIL = "omvaluehomes6@gmail.com";
-
 export default function AdminAuthShell() {
-  const [email, setEmail] = useState(ADMIN_EMAIL);
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
@@ -156,23 +154,6 @@ export default function AdminAuthShell() {
     );
   }
 
-  if (userEmail.toLowerCase() !== ADMIN_EMAIL) {
-    return (
-      <main className="admin-shell admin-login-shell">
-        <section className="admin-denied admin-card">
-          <h1>Admin access denied</h1>
-          <p>
-            Signed in as {userEmail}. Only the approved OM Value Homes admin
-            account can edit website content.
-          </p>
-          <button type="button" onClick={signOut}>
-            Sign Out
-          </button>
-        </section>
-      </main>
-    );
-  }
-
   return (
     <main className="admin-shell">
       <header className="admin-header">
@@ -198,7 +179,8 @@ export default function AdminAuthShell() {
         <h1>Manage website content.</h1>
         <span>
           Create blogs, upload the flat tour, publish customer cards and keep
-          founder or project information updated.
+          every homepage section, home configuration, founder and project
+          detail updated from one secure dashboard.
         </span>
       </section>
 
