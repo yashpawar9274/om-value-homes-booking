@@ -1,0 +1,16 @@
+.git
+.openai
+.sites-runtime
+.wrangler
+dist
+node_modules
+worker
+build
+examples
+db
+drizzle
+drizzle.config.ts
+vite.config.ts
+scripts
+tests
+library-assets
